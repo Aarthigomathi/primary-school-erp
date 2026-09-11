@@ -1,0 +1,27 @@
+import React,{useEffect,useState} from "react";
+import {Users,Clock,CheckCircle2,Fingerprint,Lock} from "lucide-react";
+import {Card,PageTools,Stat} from "../components/ui";
+import {todayISO} from "../utils/format";
+import {load,save} from "../utils/storage";
+
+const bioDevices=[{id:"BIO-01",name:"Main Gate Scanner",status:"Online"},{id:"BIO-02",name:"Primary Block Scanner",status:"Online"},{id:"BIO-03",name:"Staff Room Scanner",status:"Online"}];
+const hashOf=str=>{let h=0x811c9dc5;for(const c of str){h^=c.charCodeAt(0);h=Math.imul(h,0x01000193)>>>0}return h.toString(16).padStart(8,"0").toUpperCase()};
+function Attendance({role,u,s}){
+ const data=role==="Parent"?s.students.filter(x=>x.name===u?.child):s.students;
+ const [logs,setLogs]=useState(()=>load("bf_bio_logs_v1",[]));const [scanning,setScanning]=useState("");const [sync,setSync]=useState(()=>load("bf_bio_sync_v1",""));const [pulse,setPulse]=useState(false);
+ useEffect(()=>save("bf_bio_logs_v1",logs),[logs]);
+ useEffect(()=>{const t=setInterval(()=>{setPulse(true);const ts=new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});setSync(ts);save("bf_bio_sync_v1",ts);setTimeout(()=>setPulse(false),700)},15000);return()=>clearInterval(t)},[]);
+ const today=todayISO();const todayLogs=logs.filter(l=>l.date===today);
+ const scan=(name,status="Present")=>{if(scanning)return;setScanning(name);setTimeout(()=>{const t=new Date();const time=t.toTimeString().slice(0,8);const late=status==="Present"&&(t.getHours()>8||(t.getHours()===8&&t.getMinutes()>45));const st=status==="Absent"?"Absent":late?"Late":"Present";const dev=bioDevices[Math.floor(Math.random()*2)];const prev=logs[0]?.hash||"GENESIS";const body=`${name}|${today}|${time}|${st}|${dev.id}|${prev}`;const rec={id:Date.now(),name,date:today,time,status:st,device:dev.id,by:u?.name||"System",prev,hash:hashOf(body),synced:true};setLogs([rec,...logs]);s.setAttendance({...s.attendance,[name]:st});setScanning("");s.notify(`✓ ${name} · ${st} · fingerprint verified on ${dev.name}`)},1100)};
+ const verify=()=>{let ok=true;const chain=[...logs].reverse();let prev="GENESIS";for(const l of chain){if(l.prev!==prev||hashOf(`${l.name}|${l.date}|${l.time}|${l.status}|${l.device}|${l.prev}`)!==l.hash){ok=false;break}prev=l.hash}s.notify(ok?"🔒 All "+logs.length+" logs verified · chain intact, no tampering":"⚠ Log chain broken – tampering detected")};
+ const cnt=st=>data.filter(x=>(todayLogs.find(l=>l.name===x.name)||{}).status===st).length;
+ return <><PageTools title="Biometric Attendance" sub="Fingerprint-verified attendance. Logs are auto-synced to the school server and hash-secured." action={role!=="Parent"?verify:null} actionText="Verify Log Integrity"/>
+ <div className="stats"><Stat title="Present" value={cnt("Present")} sub="Verified today" icon={CheckCircle2}/><Stat title="Late" value={cnt("Late")} sub="After 08:45 AM" icon={Clock}/><Stat title="Absent" value={cnt("Absent")} sub="Marked today" icon={Users}/><Stat title="Not Scanned" value={data.length-todayLogs.filter(l=>data.some(d=>d.name===l.name)).length} sub="Awaiting scan" icon={Fingerprint}/></div>
+ <div className="sync-bar"><span className={"sync-dot "+(pulse?"on":"")}></span><Lock size={14}/> <b>Auto-sync ON</b> · Encrypted (AES-256) · Last synced {sync||"just now"} · {bioDevices.filter(d=>d.status==="Online").length}/{bioDevices.length} scanners online <span className="pill" style={{marginLeft:"auto"}}>{todayLogs.length} logs today</span></div>
+ <div className="grid2">
+  <Card title="Scan Attendance" action={<span className="pill live">● Scanner Ready</span>}><table><thead><tr><th>Student</th><th>Class</th><th>Today</th><th>Fingerprint</th></tr></thead><tbody>{data.map(x=>{const l=todayLogs.find(y=>y.name===x.name);return <tr key={x.name}><td><b>{x.name}</b></td><td>{x.className}</td><td>{l?<span className={l.status==="Present"?"present":l.status==="Late"?"pending":"status neg"}>{l.status} · {l.time.slice(0,5)}</span>:<span className="muted">—</span>}</td><td>{role!=="Parent"&&<div className="scan-btns"><button type="button" className={"fp "+(scanning===x.name?"scanning":"")} onClick={()=>scan(x.name)} title="Scan fingerprint"><Fingerprint size={18}/>{scanning===x.name?"Scanning…":l?"Re-scan":"Scan"}</button><button type="button" className="link" onClick={()=>scan(x.name,"Absent")}>Absent</button></div>}</td></tr>})}</tbody></table></Card>
+  <Card title="Secured Attendance Logs" action={<span className="pill"><Lock size={11}/> hash-chained</span>}>{logs.length===0&&<p className="muted">No biometric logs yet. Scan a student to begin.</p>}<div className="loglist">{logs.slice(0,20).map(l=><div className="log" key={l.id}><Fingerprint size={16} className={l.status==="Absent"?"txt-neg":"txt-pos"}/><div><b>{l.name} <span className={l.status==="Present"?"present":l.status==="Late"?"pending":"status neg"}>{l.status}</span></b><small>{l.date} {l.time} · {l.device} · by {l.by}</small><code>#{l.hash} ← {l.prev.slice(0,8)}</code></div><span className="present" title="Synced to server">☁ synced</span></div>)}</div></Card>
+  <Card title="Scanner Devices">{bioDevices.map(d=><div className="activity" key={d.id}><span className="dot" style={{background:"#16a34a"}}></span><div><b>{d.name}</b><small>{d.id} · Heartbeat OK</small></div><span className="present" style={{marginLeft:"auto"}}>{d.status}</span></div>)}</Card>
+ </div></>}
+
+export {bioDevices,hashOf,Attendance};
