@@ -58,7 +58,7 @@ header{background:#fff;border-bottom-color:#e4dfe1}header h2{color:#171717}
 @media(max-width:560px){.search{flex-wrap:wrap}.search select{width:100%;margin-left:0}}
 
 /* Login: exactly three balanced portals */
-.role-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%}
+.role-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%}
 .role{min-width:0;width:100%;min-height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .role small{text-align:center;line-height:1.35}
 
